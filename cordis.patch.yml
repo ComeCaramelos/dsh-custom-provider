@@ -1,0 +1,9 @@
+# @comecaramelos/dsh-custom-provider — bundle patch.
+# Registers the `custom-provider` row so the browser bundle (lib/client.js)
+# loads. The whole feature is web-plane: the row carries no host configuration
+# because the toggle reads and writes the pi-ai adapter's own `llm-pi-ai`
+# settings namespace — there is no plugin-owned settings section.
+- insert:
+    - id: custom-provider
+      name: '@comecaramelos/dsh-custom-provider'
+      config: {}
