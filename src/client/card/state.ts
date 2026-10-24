@@ -20,7 +20,7 @@ import { useRef, useState } from "react";
 import { COPY } from "../copy.js";
 import { stageOf } from "../profile.js";
 import { landStaged } from "./flush.js";
-import type { SettingsPathOp, SettingsScope } from "../types.js";
+import type { ConfigForm, SettingsPathOp } from "../types.js";
 
 /** The live view the DOM-dispatched signals read. Refreshed every render. */
 export interface CardLiveView {
@@ -28,7 +28,7 @@ export interface CardLiveView {
     dot: boolean;
     active: boolean;
     route: string;
-    scope: SettingsScope;
+    scope: ConfigForm;
     staged: SettingsPathOp[] | null;
 }
 
@@ -72,7 +72,7 @@ export interface CardState {
  * cross-signal verbs (staging, flushing) the effects call through it.
  * @param scope - the namespace scope bound to this component.
  */
-export function useCardState(scope: SettingsScope): CardState {
+export function useCardState(scope: ConfigForm): CardState {
     var failurePair: [string | null, (value: string | null) => void] = useState<string | null>(null);
     var failure = failurePair[0];
     var setFailure = failurePair[1];

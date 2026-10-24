@@ -54,12 +54,18 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh": "^1.0.0",
-    "@deepseek-ai/dsh-client-ui-settings": "^1.0.0",
+    "@comecaramelos/dsh-ancesters": "^0.0.1",
     "react": "^19.0.0"
   },
   "devDependencies": {
+    "@comecaramelos/dsh-ancesters": "^0.0.1",
     "esbuild": "^0.25.12",
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "dsh": "^0.2.0-0"
+  },
+  "allowScripts": {
+    "esbuild": true
   }
 }

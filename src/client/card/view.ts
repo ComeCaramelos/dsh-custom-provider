@@ -9,7 +9,7 @@
  * draws from the state, and the view states both sides of that pair.
  */
 import { hasForeignAuthorization, isNoKeyActive, showDot, showToggle, stageOf } from "../profile.js";
-import type { NoApiKeyToggleCardProps, ScopeSnapshot, SettingsPathOp } from "../types.js";
+import type { ConfigFormSnapshot, NoApiKeyToggleCardProps, SettingsPathOp } from "../types.js";
 
 /** Every gate and fact one render draws. */
 export interface CardView {
@@ -25,6 +25,8 @@ export interface CardView {
     active: boolean;
     /** Writes may land at all. */
     writable: boolean;
+    /** The form serves nothing to this browser (remote URL / memory mode). */
+    unavailable: boolean;
     /** A foreign `Authorization` stands: the toggle renders off and disabled. */
     conflict: boolean;
     /** What the STAGED state shows (render-side; `stageOf` over the state). */
@@ -42,7 +44,7 @@ export interface CardView {
  */
 export function resolveCardView(
     props: NoApiKeyToggleCardProps,
-    snapshot: ScopeSnapshot | undefined,
+    snapshot: ConfigFormSnapshot | undefined,
     staged: SettingsPathOp[] | null,
     stagedNow: SettingsPathOp[] | null
 ): CardView {
@@ -61,6 +63,7 @@ export function resolveCardView(
         ready: ready,
         active: active,
         writable: writable,
+        unavailable: !!snapshot && (snapshot.status === "unavailable" || snapshot.mode === "memory"),
         conflict: visible && ready && hasForeignAuthorization(snapshot, route),
         stage: stageOf(staged, active),
         liveStage: stageOf(stagedNow, active)

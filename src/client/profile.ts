@@ -2,7 +2,7 @@
  * Browser half — the pure read/write surface.
  *
  * Every fact the card claims about a route's profile resolves here, against
- * the namespace scope snapshot, and every mutation this plugin issues is
+ * the adapter entry's config-form snapshot, and every mutation this plugin issues is
  * described here as an op. Nothing in this module touches the DOM, React or
  * the shell services; it is the module the tests drive directly.
  *
@@ -21,10 +21,10 @@
  */
 import { NO_KEY_HEADER, NO_KEY_VALUE } from "./plugin-meta.js";
 import type {
+    ConfigFormSnapshot,
     ProfileHeaderMap,
     ProviderOwner,
     ResolvedProfile,
-    ScopeSnapshot,
     SettingsPathOp
 } from "./types.js";
 
@@ -37,7 +37,7 @@ import type {
  * @param route - the provider route id.
  * @returns the header map, or undefined when the route names none.
  */
-export function profileHeaders(snapshot: ScopeSnapshot | undefined, route: string): ProfileHeaderMap | undefined {
+export function profileHeaders(snapshot: ConfigFormSnapshot | undefined, route: string): ProfileHeaderMap | undefined {
     var user = snapshot && snapshot.user;
     var profile = user && user.providers && user.providers[route];
     var headers = profile && profile.headers;
@@ -50,7 +50,7 @@ export function profileHeaders(snapshot: ScopeSnapshot | undefined, route: strin
  * exact value counts; an `Authorization` the user typed themselves is
  * not this toggle's state.
  */
-export function isNoKeyActive(snapshot: ScopeSnapshot | undefined, route: string): boolean {
+export function isNoKeyActive(snapshot: ConfigFormSnapshot | undefined, route: string): boolean {
     var headers = profileHeaders(snapshot, route);
     return !!headers && headers[NO_KEY_HEADER] === NO_KEY_VALUE;
 }
@@ -62,7 +62,7 @@ export function isNoKeyActive(snapshot: ScopeSnapshot | undefined, route: string
  * it, so the view must stay off and disabled with the reason shown.
  * The value itself is never read out (it can be a real key).
  */
-export function hasForeignAuthorization(snapshot: ScopeSnapshot | undefined, route: string): boolean {
+export function hasForeignAuthorization(snapshot: ConfigFormSnapshot | undefined, route: string): boolean {
     var headers = profileHeaders(snapshot, route);
     return !!headers && Object.prototype.hasOwnProperty.call(headers, NO_KEY_HEADER) && headers[NO_KEY_HEADER] !== NO_KEY_VALUE;
 }
@@ -77,7 +77,7 @@ export function hasForeignAuthorization(snapshot: ScopeSnapshot | undefined, rou
  * @param route - the provider route id.
  * @returns the profile, or `undefined` when the route names none.
  */
-export function resolvedProfile(snapshot: ScopeSnapshot | undefined, route: string): ResolvedProfile | undefined {
+export function resolvedProfile(snapshot: ConfigFormSnapshot | undefined, route: string): ResolvedProfile | undefined {
     var value = snapshot && snapshot.value;
     if (!value || typeof value !== "object") return undefined;
     var providers = (value as { providers?: unknown }).providers;
@@ -117,7 +117,7 @@ export function headerConfigured(profile: ResolvedProfile | undefined): boolean 
  * of its own (the DOM check in `positionDot` never parks two). Pure
  * observation: nothing here writes.
  */
-export function showDot(owner: ProviderOwner | undefined, snapshot: ScopeSnapshot | undefined): boolean {
+export function showDot(owner: ProviderOwner | undefined, snapshot: ConfigFormSnapshot | undefined): boolean {
     var provider = owner && owner.provider;
     if (!(provider && provider.declared === true && typeof provider.provider === "string" && provider.provider.length > 0)) {
         return false;

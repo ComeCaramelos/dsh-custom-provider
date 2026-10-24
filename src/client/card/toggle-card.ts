@@ -105,7 +105,7 @@ export function NoApiKeyToggleCard(props: NoApiKeyToggleCardProps): any {
                 ref: state.hostRef,
                 className: "ccp_editorHost",
                 children: view.visible
-                    ? jsx(ToggleView, { active: view.stage.draftActive, staged: view.stage.dirty, writable: view.writable, conflict: view.conflict, failure: state.failure, onToggle: onToggle })
+                    ? jsx(ToggleView, { active: view.stage.draftActive, staged: view.stage.dirty, writable: view.writable, unavailable: view.unavailable, conflict: view.conflict, failure: state.failure, onToggle: onToggle })
                     : null
             }),
             jsx("span", {

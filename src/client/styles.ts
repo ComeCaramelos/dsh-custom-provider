@@ -3,37 +3,33 @@
  *
  * The plugin never references the Models page's hashed CSS-module class names
  * (they churn every rebuild); its own rules ride in under stable `ccp_*`
- * class names through a single `style[data-plugin-css=…]` tag, installed once
- * per document. The colors come from the design-system alias variables the
- * page already defines — nothing here invents a shade.
+ * class names. The colors come from the design-system alias variables the
+ * page already defines — nothing here invents a shade — and the metrics copy
+ * the editor's own field (measured on the live page): a 6px stack gap, the
+ * label at 12px/18px weight 500 in `label-secondary`, hint and warning lines
+ * at 12px/18px. The line keeps the input row's 22px height so the switch
+ * never makes the field jump.
+ *
+ * Injection is `@comecaramelos/dsh-ancesters`' `injectCardStyles`: the shared
+ * sheet (the one `SwitchField` draws with) first, then this sheet, each keyed
+ * by its content — so a page that already carries an ancestor card's copy of
+ * the shared sheet never stacks a second one, and a re-mount injects nothing.
  */
+import { injectCardStyles } from "@comecaramelos/dsh-ancesters/styles";
 
-/** The whole rule sheet — one plugin-owned tag, never page class names. */
-var CSS =
-    ".ccp_editorHost{display:flex;flex-direction:column;gap:2px}" +
+/** The whole rule sheet — plugin-owned classes, never page class names. */
+export var CSS =
+    ".ccp_editorHost{display:flex;flex-direction:column;gap:6px}" +
     ".ccp_dot{display:inline-block;flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-success-primary)}" +
     ".ccp_anchor{display:none}" +
-    ".ccp_line{align-items:center;gap:8px;display:flex}" +
-    ".ccp_value{color:var(--dsw-alias-label-secondary);border:0;background:0 0;padding:0;font-size:12px}" +
-    ".ccp_hint{color:var(--dsw-alias-label-tertiary);margin:0;font-size:12px;line-height:1.5}" +
-    ".ccp_warning{color:var(--dsw-alias-label-error);margin:0;font-size:12px}";
+    ".ccp_line{align-items:center;gap:8px;display:flex;min-height:22px;min-width:0}" +
+    ".ccp_label{color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:500;line-height:18px;white-space:nowrap}" +
+    ".ccp_value{color:var(--dsw-alias-label-tertiary);font:inherit;font-size:12px;line-height:18px;border:0;background:0 0;padding:0;margin:0;min-width:0;flex:0 1 auto;field-sizing:content;text-overflow:ellipsis}" +
+    ".ccp_hint,.ccp_warning{margin:0;font-size:12px;font-weight:400;line-height:18px}" +
+    ".ccp_hint{color:var(--dsw-alias-label-tertiary)}" +
+    ".ccp_warning{color:var(--dsw-alias-label-error)}";
 
-/** The `data-plugin-css` tag identity — the one installed sheet for this half. */
-var CSS_TAG = "@comecaramelos/dsh-custom-provider/NoApiKeyToggle.module.css";
-
-var cssInstalled = false;
-
-/** Install the stylesheet once per document (the tag may pre-exist from an earlier mount). */
-export function ensureCss(doc: Document): void {
-    if (cssInstalled) return;
-    if (doc.querySelector('style[data-plugin-css="' + CSS_TAG + '"]') !== null) {
-        cssInstalled = true;
-        return;
-    }
-    var tag = doc.createElement("style");
-    tag.dataset.plugin = "@comecaramelos/dsh-custom-provider";
-    tag.dataset.pluginCss = CSS_TAG;
-    tag.textContent = CSS;
-    doc.head.appendChild(tag);
-    cssInstalled = true;
+/** Install the shared sheet and this one (idempotent per sheet content). */
+export function ensureCss(): void {
+    injectCardStyles([CSS]);
 }

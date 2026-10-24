@@ -2,9 +2,10 @@
  * Structural views of the modules the shell seeds — and of `require` itself.
  *
  * The emitted bundle requires only ids the loader seeds into its module table
- * (`react`, `react/jsx-runtime`) plus the id this half resolves through a
- * guarded require (`@deepseek-ai/dsh-client-ui-primitives`). None of them
- * appears in a local `node_modules` tree, so each is described by its
+ * (`react`, `react/jsx-runtime`, and `@deepseek-ai/dsh-client-ui-primitives`,
+ * which only the bundled-in `dsh-ancesters` blocks import — typed by the
+ * ancestor's own declarations). None of them appears in a local
+ * `node_modules` tree, so each this half imports is described by its
  * structural shape here — the same idiom `src/client/types.ts` uses for the
  * Host contracts. Keep each shape as narrow as what this half actually
  * calls; widening it to match upstream's real surface is a drift risk the

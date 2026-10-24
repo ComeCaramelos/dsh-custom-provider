@@ -9,7 +9,7 @@
  */
 import { useEffect } from "react";
 import type { CardState } from "./state.js";
-import type { SettingsScope } from "../types.js";
+import type { ConfigForm } from "../types.js";
 
 function noop(): void {}
 
@@ -19,7 +19,7 @@ function noop(): void {}
  * @param state - the card's shared state.
  * @param scope - the namespace scope bound to this component.
  */
-export function useRevisionWatch(state: CardState, scope: SettingsScope): void {
+export function useRevisionWatch(state: CardState, scope: ConfigForm): void {
     useEffect(
         function (): () => void {
             if (!scope || typeof scope.subscribe !== "function") return noop;

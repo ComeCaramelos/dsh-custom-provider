@@ -17,5 +17,11 @@ export const NO_KEY_HEADER = "Authorization";
 /** The placeholder value written when the toggle stands on. */
 export const NO_KEY_VALUE = "Bearer none";
 
-/** Browser services consumed by this half (`slots` is wrapped in by the web runner). */
-export const inject: string[] = ["settingsScope", "slots"];
+/**
+ * Browser services consumed by this half (`slots` is wrapped in by the web
+ * runner). `configForms` is the dsh 0.2 settings door — the same surface
+ * `@comecaramelos/dsh-ancesters` builds its cards over; it replaced the old
+ * `settingsScope`, which no 0.2 build provides (a missing provider keeps the
+ * fiber waiting for activation forever).
+ */
+export const inject: string[] = ["configForms", "slots"];

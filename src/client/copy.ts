@@ -13,6 +13,7 @@ export const COPY: Record<string, string> = {
     staged: "Staged with this card — stored when the card itself is saved.",
     conflict: 'A custom Authorization header is already set on this provider. Clear it in the profile settings to use this toggle.',
     readOnly: "Settings are read-only in this deployment.",
+    unavailable: "Provider settings are not served to this browser (remote session) — the toggle cannot write here.",
     failed: "The settings write was rejected; the profile was left unchanged.",
     dotAuthorizationConfigured: "Authorization header configured"
 };

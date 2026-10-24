@@ -8,6 +8,14 @@ in Settings → Models, and lights a row status dot on any hand-declared row
 whose profile authenticates through a non-empty `Authorization` header. The
 whole feature is web-plane; the host half is inert.
 
+Targets **dsh `^0.2.0`** (`engines.dsh`). The shared base layer
+[`@comecaramelos/dsh-ancesters`](../dsh-ancesters) (`file:../dsh-ancesters`,
+peer `^0.2.0`) is bundled into `lib/client.js`: its `SwitchField` draws the
+toggle and its `injectCardStyles` installs the shared sheet plus this half's
+own. Build the ancestor before this package. This plugin does not use
+`mountSettingsCard` — it claims a page-owned seat, not a row configuration —
+so the seat, the DOM moves and the staged write stay here.
+
 ## Layout
 
 ```
@@ -19,7 +27,7 @@ scripts/build-client.mjs # browser-half bundler (esbuild): collapses src/client/
 src/index.ts       # host half, public face: re-exports only (name / inject / apply + the types)
 src/host/*.ts      # host half behind the face: plugin-meta (identity), apply (inert), types
 src/client/index.ts  # browser half, face: the exported surface, re-exports only
-src/client/*.ts    # browser half behind the face: profile, dom, styles, copy, toggle-view, apply, plugin-meta
+src/client/*.ts    # browser half behind the face: profile, dom, styles (ancesters injector), copy, toggle-view (ancesters SwitchField), apply, plugin-meta
 src/client/card/   # the seat component, split by concern: index (face), toggle-card (composition), state, view, snapshot, flush, placement, click-signals, revision
 src/client/shell-modules.d.ts # structural views of the loader-seeded modules (react, jsx-runtime, require)
 test/*.test.mjs    # pure-logic tests through a stubbed module loader and React
@@ -77,15 +85,22 @@ collapses it into the one classic-script artifact the loader expects (see
   path `["providers", "<route>"]`. Shipped adapters share this namespace, so
   the extension must gate on `provider.declared === true` — otherwise it would
   decorate cards of the shipped surface.
-- **Scope API.** Registration injects a Host `settingsScope` bound to
-  `llm-pi-ai`: `getSnapshot()` → `{ status, value, user, revision, writable }`,
-  `subscribe(listener)`, `mutate(ops)`. The **toggle**'s state reads come from
+- **Config form (dsh 0.2).** `apply` takes `ctx.configForms.get("llm-pi-ai")`
+  (the adapter's entry id) and claims the seat inside
+  `configForms.whileServed(["llm-pi-ai"], …)`, so a deployment without the
+  adapter shows no seat; the form is injected into the seat as `scope`. The
+  pre-0.2 `settingsScope` no longer exists — a plugin that still injects it
+  never activates. `getSnapshot()` → `{ status, value, base, user, revision,
+  writable, mode }` (never `undefined`), `subscribe(listener)`,
+  `mutate(ops, expectedRevision?) → Promise<boolean>`. `status: "unavailable"`
+  or `mode: "memory"` (a non-loopback browser) never writes: the toggle shows
+  disabled with the remote reason. The **toggle**'s state reads come from
   the **user** layer (`snap.user.providers[route].headers`) because presence
   there is what marks the field configured by this card. The **row dot** reads
   the resolved **`value`** layer (`resolvedProfile` → `value.providers[route]
   .headers`) instead: what matters is what rides the wire, so a header folded
-  in from the base layer counts. `mutate` fences with the namespace revision
-  itself.
+  in from the base layer counts. `mutate` without `expectedRevision` fences on
+  the latest revision the form knows.
 - **Writes.** Both directions are single-key path ops so hand-maintained
   foreign headers survive:
   ON `set ["providers", route, "headers", "Authorization"] = "Bearer none"`;
@@ -104,8 +119,8 @@ collapses it into the one classic-script artifact the loader expects (see
   The commit rides `findCommitWithin` (the action row's `*_primaryButton`)
   matched on a `window` bubble listener (so React's root listener has already
   queued the page's own write — ours lands behind it). The write is a fenced
-  mutation queue op; a stale-fence rejection re-reads the scope and is replayed
-  exactly once.
+  mutation queue op: `true` is the landing; a refusal (`false`, after the
+  form's own recovery read) is replayed exactly once, then reported.
 - **The bug being fixed.** `pi-ai`'s openai-completions path throws
   `No API key for provider: <route>` when `options.apiKey` is empty and no
   non-empty `authorization` header exists; profile headers apply last and
@@ -127,11 +142,14 @@ collapses it into the one classic-script artifact the loader expects (see
 ## Invariants
 
 1. **Never reference hashed page CSS class names** (`zGbnIq_*` churn every
-   build). Styles are the plugin's own `ccp_*` classes injected via a
-   `style[data-plugin-css=...]` tag.
-2. **Bundle purity**: no value imports from sibling packages — only types are
-   documented here; cross-plugin collaboration runs through the Host services
-   (`settingsScope`, `slots`).
+   build). Styles are the plugin's own `ccp_*` classes plus the shared
+   `dsh-ancesters` sheet, both injected by the ancestor's `injectCardStyles`
+   (`style[data-dsh-ancesters-css=...]`, keyed by sheet content).
+2. **Bundle purity**: the only sibling value import is `@comecaramelos/dsh-ancesters`
+   (`./client/blocks`, `./styles` — plain ESM, bundled IN, never loaded as a
+   module of its own); no other plugin is imported. Cross-plugin collaboration
+   runs through the Host services (`configForms`, `slots`). A dsh-surface
+   helper the ancestor already absorbs is taken from it, not re-implemented.
 3. **The toggle's** gating: `keyConfigured === true` or `configured === false`
    or `!declared` → render no toggle (the credential flow, or nothing, is
    correct there). The row dot is NOT gated this way — it stands on any
@@ -153,12 +171,15 @@ collapses it into the one classic-script artifact the loader expects (see
    by esbuild (`scripts/build-client.mjs` collapses the `src/client/` modules
    into one file). Either way the emitted bundle must stay a self-registering
    `window.__ModuleLoader__.load({ id, factory })` call with no static imports
-   (the loader supplies `react`/`react/jsx-runtime`, kept external by the
-   bundler).
-8. **Local structural types only.** The Host contracts (`ScopeSnapshot`,
-   `SettingsPathOp`, the seat owner props) live in `src/client/types.ts`, and
-   the loader-seeded modules (`react`, `react/jsx-runtime`, `require`) in
-   `src/client/shell-modules.d.ts` — no type imports from host packages, and
+   (the loader supplies `react`/`react/jsx-runtime` and
+   `@deepseek-ai/dsh-client-ui-primitives`, kept external by the bundler).
+8. **Local structural types only.** The Host contracts (`ConfigFormSnapshot`,
+   `ConfigForm`, `SettingsPathOp`, the seat owner props) live in
+   `src/client/types.ts` — the same fields `dsh-ancesters` reads, plus the
+   `user`/`base` layers only this card needs (the ancestor's published client
+   declarations carry neither) — and the loader-seeded modules (`react`,
+   `react/jsx-runtime`, `require`) in `src/client/shell-modules.d.ts` — no
+   type imports from host packages, and
    no DOM typing for the page-owned nodes (they are matched by class *suffix*,
    so a structural DOM type would claim more than the contract allows).
 9. **The row dot never writes.** It is pure observation (the only writer of
@@ -181,11 +202,15 @@ collapses it into the one classic-script artifact the loader expects (see
 `lib/client.js`, so a build is always part of the run (edit the modules under
 `src/client/` and `src/host/`, never the output). Tests import that bundle
 with a stubbed `window.__ModuleLoader__` and stubbed `react`/`react/jsx-runtime`
-requires, then exercise the pure surface (`profileHeaders`, `isNoKeyActive`,
+requires (plus `@deepseek-ai/dsh-client-ui-primitives`, whose `Switch` — what
+the ancestor's `SwitchField` draws — stands in as a checkbox), then exercise the pure surface (`profileHeaders`, `isNoKeyActive`,
 `configureOps`, `clearOps`, the staged trio `stagedOps`, `stageOf`,
 `stagedDirection`, `showToggle`, and the dot trio `resolvedProfile`,
 `headerConfigured`, `showDot`), the component tree, the `apply()`
-slot claim, and the DOM placement (`hasClassEnding`, `findEditorWithin`,
+slot claim over a fake `configForms` (`get` + `whileServed`, served and not),
+the config-form contract (a `false` from `mutate` replays once, then reports;
+an `unavailable`/`memory` form shows the remote reason), the shared-sheet
+injection (once per sheet), and the DOM placement (`hasClassEnding`, `findEditorWithin`,
 `findCommitWithin`, `positionHost`, plus the row-head pair
 `findRowIdentityWithin` / `positionDot`) against a fake DOM whose row head
 reproduces the page's `rowIdentity` (and, when a case calls for it, a parked
@@ -207,8 +232,10 @@ key.
 
 Run against a real DSH host with the profile under test:
 
-1. Build the bundle if `lib/` is missing (`npm install && npm run build`), then
-   link this checkout: `dsh plugin --profile plugin-dev add
+1. Build `../dsh-ancesters` first (`npm install && npm run build` there), then
+   this bundle if `lib/` is missing (`npm install && npm run build`). A clean
+   start (no `client-modules: "…" is waiting for activation` line) means the
+   `configForms` inject resolved. Then link this checkout: `dsh plugin --profile plugin-dev add
    link:<this-checkout>`. The profile must always mount this checkout — never a
    published npm copy of `@comecaramelos/dsh-custom-provider` (keep global
    install locations free of `@comecaramelos/*`; see the profile guidance in

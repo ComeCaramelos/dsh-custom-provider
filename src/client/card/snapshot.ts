@@ -1,23 +1,24 @@
 /**
- * Browser half — `card/`: the namespace scope snapshot as render state.
+ * Browser half — `card/`: the config-form snapshot as render state.
  *
  * Every pushed `settings/document-updated` lands as a NEW snapshot object and
  * re-renders the card: that is the card's whole connection to stored state
  * (the toggle reads the `user` layer, the dot the resolved `value` layer —
  * `../profile.js` reads them out here). The `getSnapshot` reference is stable
- * per scope, and `subscribe` is re-bound on scope identity only: the scope is
- * bound once at mount, so a churn of props never re-seats the store.
+ * per form, and `subscribe` is re-bound on form identity only: the form is
+ * taken once at mount, so a churn of props never re-seats the store.
  */
 import { useMemo, useSyncExternalStore } from "react";
-import type { ScopeSnapshot, SettingsScope } from "../types.js";
+import type { ConfigForm, ConfigFormSnapshot } from "../types.js";
 
 /**
  * Subscribe the component to `scope`: the returned snapshot re-renders on
  * every document update.
- * @param scope - the namespace scope bound to this component.
- * @returns the current snapshot, or `undefined` while the scope resolves.
+ * @param scope - the adapter entry's config form bound to this component.
+ * @returns the current snapshot (`loading` while the form resolves — the form
+ *  never answers `undefined`).
  */
-export function useScopeSnapshot(scope: SettingsScope): ScopeSnapshot | undefined {
+export function useScopeSnapshot(scope: ConfigForm): ConfigFormSnapshot {
     var subscribe = useMemo(
         function (): (listener: () => void) => () => void {
             return function (listener) {
@@ -28,10 +29,10 @@ export function useScopeSnapshot(scope: SettingsScope): ScopeSnapshot | undefine
     );
     return useSyncExternalStore(
         subscribe,
-        function (): ScopeSnapshot | undefined {
+        function (): ConfigFormSnapshot {
             return scope.getSnapshot();
         },
-        function (): ScopeSnapshot | undefined {
+        function (): ConfigFormSnapshot {
             return scope.getSnapshot();
         }
     );
