@@ -1,6 +1,6 @@
 {
   "name": "@comecaramelos/dsh-custom-provider",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "DSH plugin: a \"No API key required\" toggle on saved hand-declared provider cards that writes Authorization: Bearer none so keyless local/self-hosted endpoints stop aborting with \"No API key for provider\"",
   "keywords": [
     "dsh",
