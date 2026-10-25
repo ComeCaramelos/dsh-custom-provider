@@ -41,42 +41,29 @@ function fireWindowClick(target) {
 }
 
 // Minimal page surface: the observer effect bails when `document` is absent,
-// and `apply` installs its stylesheet through `document.querySelector(
-// 'style[data-plugin-css=…]')` / `createElement("style")` / `head.appendChild`.
-// The sheet's identity lives next to the document, not in the node, so the
-// component may assign `dataset` either way and the check still holds.
+// and `apply` installs its stylesheets through dsh-ancesters' injector —
+// `document.querySelectorAll('style[data-dsh-ancesters-css=…]')` /
+// `createElement("style")` / `head.appendChild`. Each appended sheet is kept
+// by its identity, so a test can count what stands on the page.
 globalThis.document = {
-    head: { appendChild() {} },
+    head: {
+        appendChild(node) {
+            const id = node.dataset.dshAncestersCss;
+            if (id) document._sheets.set(id, node);
+        }
+    },
     _sheets: new Map(),
+    querySelectorAll(selector) {
+        const m = /^style\[data-dsh-ancesters-css="([^"]+)"\]$/.exec(selector);
+        if (!m) return [];
+        return this._sheets.has(m[1]) ? [this._sheets.get(m[1])] : [];
+    },
     querySelector(selector) {
-        const m = /^style\[data-plugin-css="([^"]+)"\]$/.exec(selector);
-        if (!m) return null;
-        return this._sheets.get(m[1]) || null;
+        return this.querySelectorAll(selector)[0] || null;
     },
     createElement() {
-        const doc = this;
         const node = new FakeNode("", { tag: "style" });
-        let identity;
-        const tracker = {
-            get plugin() {
-                return node._plugin;
-            },
-            set plugin(value) {
-                node._plugin = value;
-            }
-        };
-        Object.defineProperty(tracker, "pluginCss", {
-            get() {
-                return identity;
-            },
-            set(value) {
-                identity = value;
-                if (value) doc._sheets.set(value, node);
-            },
-            enumerable: true,
-            configurable: true
-        });
-        Object.defineProperty(node, "dataset", { get: () => tracker, configurable: true });
+        node.dataset = {};
         return node;
     }
 };
@@ -214,9 +201,28 @@ const jsxStub = {
     jsxs: renderNode
 };
 
+// The shell's `Switch` primitive (what dsh-ancesters' `SwitchField` draws),
+// stubbed as the checkbox it stands for: `checked`/`disabled` pass through and
+// a change forwards the box's state, exactly like the primitive's `onChange`.
+const primitivesStub = {
+    Switch(props) {
+        return renderNode("input", {
+            type: "checkbox",
+            checked: props.checked,
+            disabled: props.disabled,
+            "aria-label": props.label,
+            onChange: (event) => props.onChange(!!(event && event.target && event.target.checked))
+        });
+    },
+    Menu() {
+        return null;
+    }
+};
+
 function requireStub(id) {
     if (id === "react") return reactStub;
     if (id === "react/jsx-runtime") return jsxStub;
+    if (id === "@deepseek-ai/dsh-client-ui-primitives") return primitivesStub;
     throw new Error("unexpected require: " + id);
 }
 
@@ -357,9 +363,9 @@ function connect(node) {
 
 // ── plugin surface ─────────────────────────────────────────────────────────
 
-test("registers under the adapter namespace and consumes the settings scope and slots", () => {
+test("registers under the adapter namespace and consumes the config forms and slots", () => {
     assert.equal(plugin.SETTINGS_NS, "llm-pi-ai");
-    assert.deepEqual(plugin.inject, ["settingsScope", "slots"]);
+    assert.deepEqual(plugin.inject, ["configForms", "slots"]);
     assert.equal(typeof plugin.apply, "function");
 });
 
@@ -662,7 +668,7 @@ function fakeScope(snapshot, mutations = []) {
         subscribe: () => () => {},
         mutate: (ops) => {
             mutations.push(ops);
-            return Promise.resolve();
+            return Promise.resolve(true);
         }
     };
 }
@@ -749,23 +755,34 @@ test("read-only settings render the control disabled with a warning", () => {
 
 // ── slot registration through apply() ──────────────────────────────────────
 
-test("apply claims the provider-card seat with the namespace-scoped scope", () => {
-    const bindings = [];
+function fakeApplyContext(form, options = {}) {
+    const gets = [];
+    const watches = [];
     const registrations = [];
-    let injectedSlot = null;
-    const scope = { getSnapshot: () => ({ status: "ready", writable: true }), subscribe: () => () => {}, mutate: () => Promise.resolve() };
+    const slotNames = [];
+    const configForms = {
+        get: (entryId) => {
+            gets.push(entryId);
+            return form;
+        }
+    };
+    if (options.whileServed !== false) {
+        configForms.whileServed = (namespaces, register) => {
+            const watch = { namespaces, register, dispose: null };
+            watches.push(watch);
+            if (options.served !== false) watch.dispose = register(new Set(namespaces));
+            return () => {
+                if (typeof watch.dispose === "function") watch.dispose();
+            };
+        };
+    }
     const ctx = {
-        settingsScope: {
-            bind: (spec) => {
-                bindings.push(spec);
-                return scope;
-            }
-        },
+        configForms,
         slots: {
             inject: (slotName, factory) => {
-                injectedSlot = slotName;
+                slotNames.push(slotName);
                 registrations.push(factory());
-                return () => {};
+                return () => slotNames.push("disposed:" + slotName);
             },
             register: (registration, component) => {
                 registrations.push({ registration, component });
@@ -774,23 +791,61 @@ test("apply claims the provider-card seat with the namespace-scoped scope", () =
         },
         effect: (fn) => fn()
     };
+    return { ctx, gets, watches, registrations, slotNames };
+}
 
-    plugin.apply(ctx);
-    assert.equal(injectedSlot, "settings.models.provider-card");
-    assert.deepEqual(bindings, [{ namespace: "llm-pi-ai" }]);
+function readyForm() {
+    return { getSnapshot: () => ({ status: "ready", writable: true }), subscribe: () => () => {}, mutate: () => Promise.resolve(true) };
+}
+
+test("apply claims the provider-card seat with the adapter entry's config form", () => {
+    const form = readyForm();
+    const { ctx, gets, watches, registrations, slotNames } = fakeApplyContext(form);
+
+    const dispose = plugin.apply(ctx);
+    assert.deepEqual(gets, ["llm-pi-ai"], "the form is taken by the adapter's entry id");
+    assert.equal(watches.length, 1);
+    assert.deepEqual(watches[0].namespaces, ["llm-pi-ai"], "the seat follows the served namespace");
+    assert.deepEqual(slotNames, ["settings.models.provider-card"]);
     const claimed = registrations.find((r) => r.registration);
     assert.equal(claimed.registration.name, "settings.models.provider-card");
     assert.equal(claimed.registration.key, "llm-pi-ai");
     assert.equal(claimed.component, plugin.NoApiKeyToggleCard);
-    assert.equal(claimed.registration.inject().scope, scope);
+    assert.equal(claimed.registration.inject().scope, form);
+    dispose();
+    assert.deepEqual(slotNames, ["settings.models.provider-card", "disposed:settings.models.provider-card"], "the disposer ends the claim");
 });
 
-test("apply stays inert without the slots or settings-scope services", () => {
+test("apply claims nothing while the adapter namespace is not served", () => {
+    const { ctx, watches, slotNames } = fakeApplyContext(readyForm(), { served: false });
+    plugin.apply(ctx);
+    assert.equal(watches.length, 1);
+    assert.deepEqual(slotNames, [], "no namespace served, no seat");
+});
+
+test("apply claims the seat outright on a shell without whileServed", () => {
+    const { ctx, slotNames } = fakeApplyContext(readyForm(), { whileServed: false });
+    plugin.apply(ctx);
+    assert.deepEqual(slotNames, ["settings.models.provider-card"]);
+});
+
+test("apply installs the shared ancesters sheet plus its own, once each", () => {
+    plugin.apply(fakeApplyContext(readyForm()).ctx);
+    plugin.apply(fakeApplyContext(readyForm()).ctx);
+    const sheets = [...document._sheets.values()];
+    assert.equal(sheets.length, 2, "the shared sheet and this half's sheet, never a second copy");
+    assert.ok(sheets.some((node) => node.textContent.includes(".ccp_editorHost")), "this half's rules stand");
+});
+
+test("apply stays inert without the slots or config-forms services", () => {
     let effectRan = false;
     const cleanup = plugin.apply({ effect: () => (effectRan = true) });
     assert.equal(effectRan, false);
     assert.equal(typeof cleanup, "function");
     assert.equal(typeof plugin.apply({}), "function");
+    const legacy = { settingsScope: { bind: () => ({}) }, slots: { inject: () => () => {} }, effect: () => (effectRan = true) };
+    assert.equal(typeof plugin.apply(legacy), "function");
+    assert.equal(effectRan, false, "the pre-0.2 settingsScope alone is not a settings door");
 });
 
 // ── row status dot: pure condition (the resolved `value` layer) ─────────────
@@ -967,7 +1022,7 @@ function liveScope(doc, scopeListeners) {
                 }
             }
             doc.revision += 1;
-            return Promise.resolve();
+            return Promise.resolve(true);
         }
     };
 }
@@ -1177,4 +1232,41 @@ test("no churn resurrects a stage Cancel dropped before the state settles", asyn
     assert.equal(doc.mutations.length, 0, "what Cancel dropped stays dropped");
     endComponentInstance();
     endHookSession();
+});
+
+// ── dsh 0.2 config-form contract ───────────────────────────────────────────
+
+test("a refused write (mutate answers false) is replayed exactly once, then reported", async () => {
+    const row = fakeCard();
+    const doc = { headers: { Authorization: "Bearer none" }, revision: 3, mutations: [] };
+    const listeners = [];
+    const scope = { ...liveScope(doc, listeners) };
+    scope.mutate = (ops) => {
+        doc.mutations.push(ops);
+        return Promise.resolve(false);
+    };
+    const tree = mountCard(row, scope);
+    const box = find(tree, (n) => n.props && n.props.type === "checkbox");
+    box.props.onChange({ target: { checked: false } });
+    softRender({ ...owner(), scope });
+
+    doc.revision += 1;
+    for (const notify of [...listeners]) notify();
+    await settle();
+    assert.equal(doc.mutations.length, 2, "one attempt plus one replay, never more");
+    assert.equal(doc.headers.Authorization, "Bearer none", "a refusal leaves the profile as it was");
+    const warning = find(softRender({ ...owner(), scope }), (n) => n.props && n.props.className === "ccp_warning");
+    assert.ok(warning && /rejected/.test(warning.props.children), "the failure is surfaced");
+    endComponentInstance();
+    endHookSession();
+});
+
+test("a form not served to this browser renders the toggle disabled with the remote reason", () => {
+    const memory = { status: "unavailable", writable: false, mode: "memory", user: undefined, value: undefined };
+    const tree = plugin.NoApiKeyToggleCard({ ...owner(), scope: fakeScope(memory) });
+    const box = find(tree, (n) => n.props && n.props.type === "checkbox");
+    assert.equal(box.props.disabled, true);
+    const warning = find(tree, (n) => n.props && n.props.className === "ccp_warning");
+    assert.ok(warning && /not served to this browser/.test(warning.props.children), "the remote reason, not the read-only one");
+    assert.equal(find(tree, (n) => typeof n.props.children === "string" && n.props.children.includes("read-only")), undefined);
 });

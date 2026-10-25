@@ -35,10 +35,21 @@ dsh plugin --profile web add link:/path/to/dsh-custom-provider
    you typed yourself. The dot never touches the profile and never shows on
    top of the page's own credential dot (never two indicators).
 
+## Requirements
+
+DSH `^0.2.0` (release candidates included). The settings door is dsh 0.2's
+`configForms` service, and the toggle is drawn with the shared widgets of
+[`@comecaramelos/dsh-ancesters`](https://github.com/ComeCaramelos/dsh-ancesters),
+which is bundled into `lib/client.js` at build time.
+
 ## Development
 
+`@comecaramelos/dsh-ancesters` resolves from a sibling checkout
+(`file:../dsh-ancesters`); build it once before building this package:
+
 ```bash
-npm install          # typescript + esbuild devDependencies
+(cd ../dsh-ancesters && npm install && npm run build)
+npm install          # typescript + esbuild devDependencies, links dsh-ancesters
 npm run build        # src/**/*.ts → lib/ (host: tsc; browser: tsc typecheck + esbuild bundle)
 npm test             # builds, then node --test (pure logic through stubbed loader + React)
 npm run dev          # tsc --watch
